@@ -7,10 +7,52 @@ app = Flask(__name__, static_folder=".")
 
 DB_FILE = "database.db"
 
+# Detect Render PostgreSQL Database URL
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+# Safe import psycopg2 for local environments where it might not be installed
+try:
+    import psycopg2
+    import psycopg2.extras
+    HAS_POSTGRES = True
+except ImportError:
+    HAS_POSTGRES = False
+
+USING_POSTGRES = (DATABASE_URL is not None) and HAS_POSTGRES
+
+if DATABASE_URL and not HAS_POSTGRES:
+    print("[⚠️ WARNING] DATABASE_URL env is set but psycopg2 is not installed. Falling back to local SQLite.")
+
+# --- DATABASE CONNECTION WRAPPERS ---
+
 def get_db():
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    return conn
+    if USING_POSTGRES:
+        # Connect to PostgreSQL
+        conn = psycopg2.connect(DATABASE_URL)
+        return conn
+    else:
+        # Connect to SQLite
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+def db_execute(conn, query, params=()):
+    """
+    Unified execution helper.
+    Converts %s placeholders to ? dynamically when running on SQLite.
+    Returns a cursor supporting fetchone() and fetchall().
+    """
+    if not USING_POSTGRES:
+        # SQLite uses ? instead of %s
+        query = query.replace("%s", "?")
+        cur = conn.cursor()
+        cur.execute(query, params)
+        return cur
+    else:
+        # PostgreSQL uses psycopg2 DictCursor for dict-like row factories
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute(query, params)
+        return cur
 
 def init_db():
     conn = get_db()
@@ -35,18 +77,31 @@ def init_db():
     )
     """)
     
-    # Create History Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        mac TEXT,
-        time TEXT,
-        duration TEXT,
-        data TEXT,
-        reason TEXT
-    )
-    """)
+    # Create History Table (Handle AUTOINCREMENT differences)
+    if USING_POSTGRES:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS history (
+            id SERIAL PRIMARY KEY,
+            name TEXT,
+            mac TEXT,
+            time TEXT,
+            duration TEXT,
+            data TEXT,
+            reason TEXT
+        )
+        """)
+    else:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            mac TEXT,
+            time TEXT,
+            duration TEXT,
+            data TEXT,
+            reason TEXT
+        )
+        """)
     
     # Create Settings Table
     cursor.execute("""
@@ -60,7 +115,11 @@ def init_db():
 
     # Seed Default Settings if empty
     cursor.execute("SELECT COUNT(*) FROM settings")
-    if cursor.fetchone()[0] == 0:
+    row = cursor.fetchone()
+    # Handle dict (Postgres RealDictCursor) vs tuple (SQLite default cursor)
+    count = row[0] if isinstance(row, tuple) else row['count']
+    
+    if count == 0:
         default_settings = [
             ("ssid", "USA-Tech-Hotspot"),
             ("password", "hotspotpassword123"),
@@ -75,12 +134,16 @@ def init_db():
             ("strict_mac", "0"),
             ("ai_sensitivity", "65")
         ]
-        cursor.executemany("INSERT INTO settings (key, value) VALUES (?, ?)", default_settings)
+        for key, val in default_settings:
+            db_execute(conn, "INSERT INTO settings (key, value) VALUES (%s, %s)", (key, val))
         conn.commit()
 
     # Seed Default Devices if empty
     cursor.execute("SELECT COUNT(*) FROM devices")
-    if cursor.fetchone()[0] == 0:
+    row = cursor.fetchone()
+    count = row[0] if isinstance(row, tuple) else row['count']
+    
+    if count == 0:
         default_devices = [
             ("7c:c3:a1:8f:54:12", "Owner Laptop (MacBook Pro)", "192.168.43.10", "P1", 1, 1, 0, 7200, 1.84, 1.2, 4.5, 15, "Active Now"),
             ("8a:00:27:f2:b4:98", "My iPhone 15 Pro", "192.168.43.15", "P1", 1, 1, 0, 3600, 0.95, 0.5, 1.8, 22, "Active Now"),
@@ -90,27 +153,36 @@ def init_db():
             ("82:e2:11:55:cd:99", "Neighbor Windows PC", "192.168.43.99", "P4", 0, 0, 1, 0, 0.01, 0.0, 0.0, 1, "Blocked 1h ago"),
             ("20:a1:00:88:ff:1a", "IoT Smart Bulbs", "192.168.43.81", "P4", 0, 1, 0, 0, 1.10, 0.0, 0.0, 30, "Disconnected 2h ago")
         ]
-        cursor.executemany("""
-        INSERT INTO devices (mac, name, ip, priority, connected, trusted, blocked, connect_time, data_used, tx_rate, rx_rate, history_count, last_active)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, default_devices)
+        for dev in default_devices:
+            db_execute(conn, """
+            INSERT INTO devices (mac, name, ip, priority, connected, trusted, blocked, connect_time, data_used, tx_rate, rx_rate, history_count, last_active)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, dev)
         conn.commit()
 
     # Seed Default History if empty
     cursor.execute("SELECT COUNT(*) FROM history")
-    if cursor.fetchone()[0] == 0:
+    row = cursor.fetchone()
+    count = row[0] if isinstance(row, tuple) else row['count']
+    
+    if count == 0:
         default_history = [
             ("My iPhone 15 Pro", "8a:00:27:f2:b4:98", "2026-08-14 15:30:12", "3h 10m", "1.45 GB", "Manual Disconnect"),
             ("Neighbor Windows PC", "82:e2:11:55:cd:99", "2026-08-14 18:12:45", "2m 14s", "12.4 MB", "Force Blocked by Admin"),
             ("IoT Smart Bulbs", "20:a1:00:88:ff:1a", "2026-08-14 12:00:00", "5h 30m", "1.10 GB", "Inactivity Timeout"),
             ("Sister's Apple Watch", "e2:18:bc:df:99:a2", "2026-08-14 14:15:02", "22m 10s", "5.2 MB", "Out of Range")
         ]
-        cursor.executemany("INSERT INTO history (name, mac, time, duration, data, reason) VALUES (?, ?, ?, ?, ?, ?)", default_history)
+        for hist in default_history:
+            db_execute(conn, "INSERT INTO history (name, mac, time, duration, data, reason) VALUES (%s, %s, %s, %s, %s, %s)", hist)
         conn.commit()
 
     conn.close()
 
-init_db()
+# Safe database initialization
+try:
+    init_db()
+except Exception as ex:
+    print(f"[❌ ERROR] Database initialization failed: {ex}")
 
 # --- STATIC FILES ROUTING ---
 
@@ -134,7 +206,7 @@ def auth_login():
     passcode = data.get("passcode")
     
     conn = get_db()
-    val = conn.execute("SELECT value FROM settings WHERE key='passcode'").fetchone()
+    val = db_execute(conn, "SELECT value FROM settings WHERE key='passcode'").fetchone()
     conn.close()
     
     if val and passcode == val["value"]:
@@ -144,7 +216,7 @@ def auth_login():
 @app.route("/api/devices", methods=["GET"])
 def get_devices():
     conn = get_db()
-    rows = conn.execute("SELECT * FROM devices").fetchall()
+    rows = db_execute(conn, "SELECT * FROM devices").fetchall()
     conn.close()
     
     devices = [dict(row) for row in rows]
@@ -161,7 +233,7 @@ def edit_device():
         return jsonify({"status": "error", "message": "MAC required"}), 400
         
     conn = get_db()
-    conn.execute("UPDATE devices SET name=?, priority=? WHERE mac=?", (name, priority, mac))
+    db_execute(conn, "UPDATE devices SET name=%s, priority=%s WHERE mac=%s", (name, priority, mac))
     conn.commit()
     conn.close()
     
@@ -171,7 +243,7 @@ def edit_device():
 def block_device():
     data = request.get_json() or {}
     mac = data.get("mac")
-    block_status = data.get("blocked") # True (1) or False (0)
+    block_status = data.get("blocked") # True or False
     
     if not mac:
         return jsonify({"status": "error", "message": "MAC required"}), 400
@@ -181,19 +253,19 @@ def block_device():
     
     # If blocking, force connected offline
     if db_block_val == 1:
-        row = conn.execute("SELECT * FROM devices WHERE mac=?", (mac,)).fetchone()
+        row = db_execute(conn, "SELECT * FROM devices WHERE mac=%s", (mac,)).fetchone()
         if row and row["connected"] == 1:
             # Add to history
             now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             duration_str = f"{row['connect_time'] // 60}m"
-            conn.execute("""
+            db_execute(conn, """
             INSERT INTO history (name, mac, time, duration, data, reason)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """, (row["name"], row["mac"], now_str, duration_str, f"{row['data_used']:.2f} GB", "Force Blocked by Admin"))
         
-        conn.execute("UPDATE devices SET blocked=?, connected=0, tx_rate=0, rx_rate=0, last_active='Blocked just now' WHERE mac=?", (db_block_val, mac))
+        db_execute(conn, "UPDATE devices SET blocked=%s, connected=0, tx_rate=0.0, rx_rate=0.0, last_active='Blocked just now' WHERE mac=%s", (db_block_val, mac))
     else:
-        conn.execute("UPDATE devices SET blocked=?, trusted=1 WHERE mac=?", (db_block_val, mac))
+        db_execute(conn, "UPDATE devices SET blocked=%s, trusted=1 WHERE mac=%s", (db_block_val, mac))
         
     conn.commit()
     conn.close()
@@ -206,12 +278,17 @@ def get_or_post_settings():
     if request.method == "POST":
         data = request.get_json() or {}
         for key, val in data.items():
-            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(val)))
+            # Compatible Upsert for both SQLite and PostgreSQL (using Select check)
+            row = db_execute(conn, "SELECT 1 FROM settings WHERE key=%s", (key,)).fetchone()
+            if row:
+                db_execute(conn, "UPDATE settings SET value=%s WHERE key=%s", (str(val), key))
+            else:
+                db_execute(conn, "INSERT INTO settings (key, value) VALUES (%s, %s)", (key, str(val)))
         conn.commit()
         conn.close()
         return jsonify({"status": "success"})
     else:
-        rows = conn.execute("SELECT * FROM settings").fetchall()
+        rows = db_execute(conn, "SELECT * FROM settings").fetchall()
         conn.close()
         settings = {row["key"]: row["value"] for row in rows}
         return jsonify(settings)
@@ -220,12 +297,12 @@ def get_or_post_settings():
 def get_or_clear_history():
     conn = get_db()
     if request.method == "POST":
-        conn.execute("DELETE FROM history")
+        db_execute(conn, "DELETE FROM history")
         conn.commit()
         conn.close()
         return jsonify({"status": "success"})
     else:
-        rows = conn.execute("SELECT * FROM history ORDER BY id DESC").fetchall()
+        rows = db_execute(conn, "SELECT * FROM history ORDER BY id DESC").fetchall()
         conn.close()
         history = [dict(row) for row in rows]
         return jsonify(history)
@@ -234,29 +311,29 @@ def get_or_clear_history():
 @app.route("/api/android/sync", methods=["POST"])
 def android_sync():
     data = request.get_json() or {}
-    sync_clients = data.get("client_macs", []) # List of dict: [{'mac': '...', 'ip': '...', 'tx_rate': 0.5, 'rx_rate': 1.0}]
+    sync_clients = data.get("client_macs", [])
     
     conn = get_db()
     
     # Load limits
-    max_dev_row = conn.execute("SELECT value FROM settings WHERE key='max_devices'").fetchone()
+    max_dev_row = db_execute(conn, "SELECT value FROM settings WHERE key='max_devices'").fetchone()
     max_devices = int(max_dev_row["value"]) if max_dev_row else 8
     
-    auto_displace_row = conn.execute("SELECT value FROM settings WHERE key='auto_displace'").fetchone()
+    auto_displace_row = db_execute(conn, "SELECT value FROM settings WHERE key='auto_displace'").fetchone()
     auto_displace = int(auto_displace_row["value"]) == 1 if auto_displace_row else True
 
-    auto_block_row = conn.execute("SELECT value FROM settings WHERE key='auto_block_unknown'").fetchone()
+    auto_block_row = db_execute(conn, "SELECT value FROM settings WHERE key='auto_block_unknown'").fetchone()
     auto_block_unknown = int(auto_block_row["value"]) == 1 if auto_block_row else False
 
-    strict_mac_row = conn.execute("SELECT value FROM settings WHERE key='strict_mac'").fetchone()
+    strict_mac_row = db_execute(conn, "SELECT value FROM settings WHERE key='strict_mac'").fetchone()
     strict_mac = int(strict_mac_row["value"]) == 1 if strict_mac_row else False
 
     # Get blocked list
-    blocked_rows = conn.execute("SELECT mac FROM devices WHERE blocked=1").fetchall()
+    blocked_rows = db_execute(conn, "SELECT mac FROM devices WHERE blocked=1").fetchall()
     blocked_macs = [row["mac"] for row in blocked_rows]
 
     # Retrieve all current active devices in DB
-    db_active_rows = conn.execute("SELECT * FROM devices WHERE connected=1").fetchall()
+    db_active_rows = db_execute(conn, "SELECT * FROM devices WHERE connected=1").fetchall()
     db_active_macs = {row["mac"]: dict(row) for row in db_active_rows}
 
     incoming_macs = []
@@ -289,30 +366,34 @@ def android_sync():
             # Increment connect time & usage (simulated update)
             db_row = db_active_macs[mac]
             new_time = db_row["connect_time"] + 5 # Synced every 5 seconds
-            # Random packet increment if speed is non-zero
             usage_inc = ((rx + tx) / 8000.0) * 5.0
             new_usage = db_row["data_used"] + usage_inc
             
-            conn.execute("""
-            UPDATE devices SET ip=?, connect_time=?, data_used=?, tx_rate=?, rx_rate=?, last_active='Active Now'
-            WHERE mac=?
+            db_execute(conn, """
+            UPDATE devices SET ip=%s, connect_time=%s, data_used=%s, tx_rate=%s, rx_rate=%s, last_active='Active Now'
+            WHERE mac=%s
             """, (ip, new_time, new_usage, tx, rx, mac))
         else:
-            # Newly Connected Device
-            # Check if unknown needs auto-blocking
-            row = conn.execute("SELECT * FROM devices WHERE mac=?", (mac,)).fetchone()
+            # Newly Connected Device (SQLite & Postgres compatible upsert check)
+            row = db_execute(conn, "SELECT * FROM devices WHERE mac=%s", (mac,)).fetchone()
             is_trusted = row["trusted"] if row else 0
             
             if auto_block_unknown and not is_trusted:
-                conn.execute("""
-                INSERT OR REPLACE INTO devices (mac, name, ip, priority, connected, trusted, blocked, connect_time, data_used, tx_rate, rx_rate, history_count, last_active)
-                VALUES (?, ?, ?, ?, 0, 0, 1, 0, 0.0, 0.0, 0.0, 1, ?)
-                """, (mac, f"Auto-Blocked Node ({mac[:8]})", ip, "P4", "Auto-Blocked immediately"))
+                if row:
+                    db_execute(conn, """
+                    UPDATE devices SET ip=%s, connected=0, blocked=1, tx_rate=0.0, rx_rate=0.0, last_active='Auto-Blocked immediately'
+                    WHERE mac=%s
+                    """, (ip, mac))
+                else:
+                    db_execute(conn, """
+                    INSERT INTO devices (mac, name, ip, priority, connected, trusted, blocked, connect_time, data_used, tx_rate, rx_rate, history_count, last_active)
+                    VALUES (%s, %s, %s, 'P4', 0, 0, 1, 0, 0.0, 0.0, 0.0, 1, 'Auto-Blocked immediately')
+                    """, (mac, f"Auto-Blocked Node ({mac[:8]})", ip))
                 
-                conn.execute("""
+                db_execute(conn, """
                 INSERT INTO history (name, mac, time, duration, data, reason)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """, (f"Auto-Blocked Node ({mac[:8]})", mac, now_str, "0s", "0 MB", "Auto-Block Unknown Rule"))
+                VALUES (%s, %s, %s, '0s', '0 MB', 'Auto-Block Unknown Rule')
+                """, (f"Auto-Blocked Node ({mac[:8]})", mac, now_str))
                 
                 sync_blocked_list.append(mac)
                 continue
@@ -323,58 +404,52 @@ def android_sync():
                 if auto_displace:
                     # Find lowest priority device currently in active database
                     active_list = list(db_active_macs.values())
-                    # Sort active list: lowest priority first (P4 > P3 > P2 > P1)
                     p_weight = {"P4": 4, "P3": 3, "P2": 2, "P1": 1}
                     active_list.sort(key=lambda x: p_weight.get(x["priority"], 4), reverse=True)
                     
                     lowest_active = active_list[0]
-                    # Check if new connection has higher priority than the lowest active
                     new_priority = row["priority"] if row else "P4"
                     if p_weight.get(new_priority, 4) < p_weight.get(lowest_active["priority"], 4):
                         # Displace/Kick lowest priority
                         kick_mac = lowest_active["mac"]
-                        conn.execute("UPDATE devices SET connected=0, tx_rate=0, rx_rate=0, last_active=? WHERE mac=?", (f"Displaced at {now_str}", kick_mac))
-                        conn.execute("""
+                        db_execute(conn, "UPDATE devices SET connected=0, tx_rate=0.0, rx_rate=0.0, last_active=%s WHERE mac=%s", (f"Displaced at {now_str}", kick_mac))
+                        db_execute(conn, """
                         INSERT INTO history (name, mac, time, duration, data, reason)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                        """, (lowest_active["name"], kick_mac, now_str, f"{lowest_active['connect_time']//60}m", f"{lowest_active['data_used']:.2f} GB", "Priority Displaced"))
+                        VALUES (%s, %s, %s, %s, %s, 'Priority Displaced')
+                        """, (lowest_active["name"], kick_mac, now_str, f"{lowest_active['connect_time']//60}m", f"{lowest_active['data_used']:.2f} GB"))
                         
-                        # Add new device
                         sync_blocked_list.append(kick_mac)
                     else:
                         # Reject new device
                         sync_blocked_list.append(mac)
                         continue
                 else:
-                    # Reject connection directly
                     sync_blocked_list.append(mac)
                     continue
 
             # Complete new device setup
             if row:
-                conn.execute("""
-                UPDATE devices SET ip=?, connected=1, connect_time=0, tx_rate=?, rx_rate=?, history_count=history_count+1, last_active='Active Now'
-                WHERE mac=?
+                db_execute(conn, """
+                UPDATE devices SET ip=%s, connected=1, connect_time=0, tx_rate=%s, rx_rate=%s, history_count=history_count+1, last_active='Active Now'
+                WHERE mac=%s
                 """, (ip, tx, rx, mac))
             else:
-                conn.execute("""
+                db_execute(conn, """
                 INSERT INTO devices (mac, name, ip, priority, connected, trusted, blocked, connect_time, data_used, tx_rate, rx_rate, history_count, last_active)
-                VALUES (?, ?, ?, 'P4', 1, 0, 0, 0, 0.0, ?, ?, 1, 'Active Now')
+                VALUES (%s, %s, %s, 'P4', 1, 0, 0, 0, 0.0, %s, %s, 1, 'Active Now')
                 """, (mac, f"New Android Node ({mac[-5:]})", ip, tx, rx))
 
     # 3. Process Disconnected Devices
     for active_mac, active_dev in db_active_macs.items():
         if active_mac not in incoming_macs:
-            # Device has gone offline
-            conn.execute("UPDATE devices SET connected=0, tx_rate=0, rx_rate=0, last_active=? WHERE mac=?", (f"Offline since {datetime.now().strftime('%H:%M')}", active_mac))
+            db_execute(conn, "UPDATE devices SET connected=0, tx_rate=0.0, rx_rate=0.0, last_active=%s WHERE mac=%s", (f"Offline since {datetime.now().strftime('%H:%M')}", active_mac))
             
-            # Log in history table
             now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             duration_str = f"{active_dev['connect_time'] // 60}m"
-            conn.execute("""
+            db_execute(conn, """
             INSERT INTO history (name, mac, time, duration, data, reason)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """, (active_dev["name"], active_mac, now_str, duration_str, f"{active_dev['data_used']:.2f} GB", "Disconnected"))
+            VALUES (%s, %s, %s, %s, %s, 'Disconnected')
+            """, (active_dev["name"], active_mac, now_str, duration_str, f"{active_dev['data_used']:.2f} GB"))
 
     conn.commit()
     conn.close()
