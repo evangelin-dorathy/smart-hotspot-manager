@@ -112,10 +112,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun sendSyncData(serverIp: String, clients: List<HotspotClient>) {
         try {
-            val urlString = if (serverIp.startsWith("http://") || serverIp.startsWith("https://")) {
-                if (serverIp.endsWith("/")) "${serverIp}api/android/sync" else "$serverIp/api/android/sync"
-            } else if (serverIp.contains("onrender.com")) {
-                "https://$serverIp/api/android/sync"
+            val urlString = if (serverIp.contains("onrender.com") || serverIp.startsWith("http")) {
+                val cleanIp = serverIp.removePrefix("http://").removePrefix("https://")
+                "https://$cleanIp/api/android/sync"
             } else {
                 "http://$serverIp:5000/api/android/sync"
             }

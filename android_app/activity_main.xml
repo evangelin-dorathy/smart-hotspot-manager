@@ -27,9 +27,9 @@
         android:id="@+id/ipInput"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Flask Server IP (e.g. 192.168.43.5)"
+        android:hint="Server Hostname (e.g. smart-hotspot-manager.onrender.com)"
         android:inputType="text"
-        android:text="192.168.43.1"
+        android:text="smart-hotspot-manager.onrender.com"
         android:layout_marginBottom="15dp"/>
 
     <Button
