@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_size"
+    android:layout_height="match_size"
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:gravity="center_horizontal">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Smart Hotspot Bridge"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:textColor="#0052cc"
+        android:layout_marginBottom="10dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="This companion app bridges your Android SoftAP client tables with your web admin database."
+        android:textAlignment="center"
+        android:textSize="14sp"
+        android:layout_marginBottom="25dp"/>
+
+    <EditText
+        android:id="@+id/ipInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Flask Server IP (e.g. 192.168.43.5)"
+        android:inputType="text"
+        android:text="192.168.43.1"
+        android:layout_marginBottom="15dp"/>
+
+    <Button
+        android:id="@+id/syncButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:backgroundTint="#0052cc"
+        android:text="Start Sync"
+        android:textColor="#ffffff"
+        android:layout_marginBottom="20dp"/>
+
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Status: Offline"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:textColor="#ff3b30"
+        android:layout_marginBottom="20dp"/>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <TextView
+            android:id="@+id/clientListText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Connected Clients list will appear here..."
+            android:textSize="14sp"
+            android:textColor="#475569"/>
+    </ScrollView>
+
+</LinearLayout>

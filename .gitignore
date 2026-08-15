@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+env/
+venv/
+ENV/
+
+# Database
+database.db
+
+# System / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp

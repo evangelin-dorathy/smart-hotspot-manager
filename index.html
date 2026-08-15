@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Smart Hotspot App</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Security Portal (Login Overlay) -->
+    <div id="auth-portal" class="auth-overlay">
+        <div class="auth-card">
+            <div class="auth-logo">
+                <div class="auth-logo-icon">📶</div>
+                <div class="auth-logo-text">Smart<span>Hotspot</span></div>
+            </div>
+            <p class="auth-intro">Protecting your portable connection. Please enter passcode to access control center.</p>
+            <div id="auth-error-msg" class="auth-error">Invalid passcode. Please try again.</div>
+            <div class="form-group" style="text-align: left;">
+                <label for="passcode-input">Enter Passcode</label>
+                <input type="password" id="passcode-input" class="setting-input" placeholder="••••" maxlength="6" style="text-align: center; font-size: 1.5rem; letter-spacing: 0.5rem;">
+            </div>
+            <button id="login-btn" class="btn btn-primary" style="width: 100%;">Unlock Dashboard</button>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Default passcode is <b>1234</b></span>
+        </div>
+    </div>
+
+    <!-- Mobile Screen Frame Container (Mimics Native App on Desktop, Fullscreen on Mobile) -->
+    <div class="app-container">
+        
+        <!-- Mobile App Top Bar Header -->
+        <div class="app-header">
+            <div class="logo-container">
+                <div class="logo-icon">📶</div>
+                <div class="logo-text">Smart<span>Hotspot</span></div>
+            </div>
+            
+            <div class="app-header-status">
+                <span id="hotspot-status-badge" class="status-indicator active">ACTIVE</span>
+            </div>
+        </div>
+
+        <!-- Main Content Area (Scrollable viewports) -->
+        <div class="app-content">
+            
+            <!-- Quick Hotspot Status Toggle Panel -->
+            <div class="mobile-status-panel">
+                <div class="status-details">
+                    <span id="hotspot-status-text" class="status-info-ssid">Broadcasting as USA-Tech-Hotspot</span>
+                    <span class="status-info-sub">Active Slot Allocations</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="hotspot-toggle" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <!-- DASHBOARD TAB -->
+            <section id="dashboard" class="tab-content active">
+                
+                <!-- Compact Metrics Row -->
+                <div class="metrics-grid">
+                    <div class="metric-card primary">
+                        <div class="metric-card-header">
+                            <span>Clients</span>
+                            <div class="metric-card-icon">👥</div>
+                        </div>
+                        <div id="metric-active-devices" class="metric-value">0</div>
+                        <div class="metric-change">
+                            <span>Limit: </span><span id="metric-max-limit" style="font-weight: 700;">8</span>
+                        </div>
+                    </div>
+                    
+                    <div class="metric-card green">
+                        <div class="metric-card-header">
+                            <span>Usage</span>
+                            <div class="metric-card-icon">📊</div>
+                        </div>
+                        <div id="metric-data-used" class="metric-value">0.00 GB</div>
+                        <div class="metric-change up">
+                            <span>~</span><span id="metric-speed">0.0</span><span> Mbps</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cap Progress Bar -->
+                <div class="metric-card amber" style="flex-direction: row; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem;">
+                    <div style="flex-grow: 1;">
+                        <div class="metric-card-header" style="margin-bottom: 0.25rem;">
+                            <span>Data Cap Progress</span>
+                            <span id="metric-cap-percent" style="font-weight: 700; color: var(--accent-amber);">0%</span>
+                        </div>
+                        <div style="width: 100%; background: var(--bg-tertiary); height: 6px; border-radius: 3px; overflow: hidden;">
+                            <div id="metric-cap-progress-bar" style="background: var(--accent-amber); height: 100%; width: 0%; transition: width 0.5s;"></div>
+                        </div>
+                    </div>
+                    <div class="metric-card-icon" style="background-color: var(--accent-amber-light); color: var(--accent-amber);">⚡</div>
+                </div>
+
+                <!-- Real-time SVG Bandwidth speed chart -->
+                <div class="layout-card">
+                    <div class="card-title-bar">
+                        <div class="card-title">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                            <span>Live Traffic Load</span>
+                        </div>
+                        <button id="simulate-connect-btn" class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.75rem;">⚡ Mock Connection</button>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <svg class="svg-chart" id="dashboard-speed-chart">
+                            <defs>
+                                <linearGradient id="chart-gradient" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="var(--primary)" stop-opacity="0.3"></stop>
+                                    <stop offset="100%" stop-color="var(--primary)" stop-opacity="0.0"></stop>
+                                </linearGradient>
+                            </defs>
+                            <line class="chart-grid" x1="35" y1="30" x2="100%" y2="30"></line>
+                            <line class="chart-grid" x1="35" y1="85" x2="100%" y2="85"></line>
+                            <line class="chart-grid" x1="35" y1="140" x2="100%" y2="140"></line>
+                            
+                            <line class="chart-axis" x1="35" y1="10" x2="35" y2="170"></line>
+                            <line class="chart-axis" x1="35" y1="170" x2="100%" y2="170"></line>
+                            
+                            <text class="chart-text" x="5" y="35">15M</text>
+                            <text class="chart-text" x="5" y="90">10M</text>
+                            <text class="chart-text" x="5" y="145">5M</text>
+                            <text class="chart-text" x="5" y="175">0</text>
+                            
+                            <path class="chart-area" d="M35 170 L 35 170 Z" id="chart-area-path"></path>
+                            <path class="chart-line" d="M35 170" id="chart-line-path"></path>
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Active list feed -->
+                <div class="layout-card">
+                    <div class="card-title-bar">
+                        <div class="card-title">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+                            <span>Live Connected Clients</span>
+                        </div>
+                    </div>
+                    <div id="dashboard-active-list" class="device-list">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- DEVICES TAB -->
+            <section id="devices" class="tab-content">
+                <div class="layout-card" style="padding: 1rem 0.75rem;">
+                    
+                    <!-- Filters chips -->
+                    <div class="filters-bar" style="margin-bottom: 1rem;">
+                        <div class="filter-chip active" data-filter="all">All (<span id="count-all">0</span>)</div>
+                        <div class="filter-chip" data-filter="active">Active (<span id="count-active">0</span>)</div>
+                        <div class="filter-chip" data-filter="trusted">Trusted (<span id="count-trusted">0</span>)</div>
+                        <div class="filter-chip" data-filter="blocked">Blocked (<span id="count-blocked">0</span>)</div>
+                    </div>
+
+                    <!-- Full Directory Scroll List -->
+                    <div id="devices-full-list" class="device-list" style="max-height: none;">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- RULES TAB (Limits + Priorities) -->
+            <section id="rules" class="tab-content">
+                
+                <!-- Limit Card -->
+                <div class="layout-card">
+                    <div class="card-title">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                        <span>Hotspot Threshold Limits</span>
+                    </div>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 1.25rem; margin-top: 0.5rem;">
+                        <div class="form-group">
+                            <div style="display: flex; justify-content: space-between;">
+                                <label for="limit-max-devices-slider">Max Connected Devices</label>
+                                <span id="limit-max-devices-val" style="font-weight: 700; color: var(--primary);">8</span>
+                            </div>
+                            <input type="range" id="limit-max-devices-slider" min="1" max="10" value="8" style="width: 100%; cursor: pointer;">
+                        </div>
+
+                        <div class="form-group">
+                            <div style="display: flex; justify-content: space-between;">
+                                <label for="limit-data-cap-slider">Daily Data Limit (GB)</label>
+                                <span id="limit-data-cap-val" style="font-weight: 700; color: var(--primary);">5.0 GB</span>
+                            </div>
+                            <input type="range" id="limit-data-cap-slider" min="0.5" max="10.0" step="0.5" value="5.0" style="width: 100%; cursor: pointer;">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Priority Levels Card -->
+                <div class="layout-card">
+                    <div class="card-title">Priority Hierarchy Allocation</div>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.5rem;">
+                        <div class="priority-card rank-1" style="padding: 0.75rem; gap: 0.75rem;">
+                            <div class="priority-rank" style="width: 36px; height: 36px; font-size: 1rem;">P1</div>
+                            <div class="priority-details">
+                                <span class="priority-title" style="font-size: 0.95rem;">Owner Core Nodes</span>
+                                <span class="priority-desc" style="font-size: 0.75rem;">Personal phones. Never displaced.</span>
+                            </div>
+                        </div>
+
+                        <div class="priority-card rank-2" style="padding: 0.75rem; gap: 0.75rem;">
+                            <div class="priority-rank" style="width: 36px; height: 36px; font-size: 1rem;">P2</div>
+                            <div class="priority-details">
+                                <span class="priority-title" style="font-size: 0.95rem;">Family Connections</span>
+                                <span class="priority-desc" style="font-size: 0.75rem;">Allowed full access. Preferred.</span>
+                            </div>
+                        </div>
+
+                        <div class="priority-card rank-3" style="padding: 0.75rem; gap: 0.75rem;">
+                            <div class="priority-rank" style="width: 36px; height: 36px; font-size: 1rem;">P3</div>
+                            <div class="priority-details">
+                                <span class="priority-title" style="font-size: 0.95rem;">Guest Friends</span>
+                                <span class="priority-desc" style="font-size: 0.75rem;">Temporary visitor profiles.</span>
+                            </div>
+                        </div>
+
+                        <div class="priority-card rank-4" style="padding: 0.75rem; gap: 0.75rem;">
+                            <div class="priority-rank" style="width: 36px; height: 36px; font-size: 1rem;">P4</div>
+                            <div class="priority-details">
+                                <span class="priority-title" style="font-size: 0.95rem;">Unknown Clients</span>
+                                <span class="priority-desc" style="font-size: 0.75rem;">Restricted. Kicked if limits hit.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rules Toggle Card -->
+                <div class="layout-card">
+                    <div class="card-title">Automated Responses</div>
+                    <div style="display: flex; flex-direction: column;">
+                        <div class="setting-row">
+                            <div class="setting-label">
+                                <span class="setting-title">Auto-Block Unknown Devices</span>
+                                <span class="setting-desc">Blacklist new unrecognized MACs instantly.</span>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="auto-block-unknown-toggle">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label">
+                                <span class="setting-title">Priority Displacement Kick</span>
+                                <span class="setting-desc">Kick lowest active MAC to allow P1/P2 logins.</span>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="auto-displace-toggle" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label">
+                                <span class="setting-title">Strict MAC Validation</span>
+                                <span class="setting-desc">Deny spoofed/randomized MAC identifiers.</span>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="strict-mac-toggle">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- HISTORY TAB -->
+            <section id="history" class="tab-content">
+                
+                <!-- Mini Analytics Overview -->
+                <div class="metrics-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="metric-card primary" style="padding: 1rem;">
+                        <div class="metric-card-header" style="font-size: 0.75rem;">
+                            <span>Lifetime Data</span>
+                        </div>
+                        <div id="analytics-total-lifetime" class="metric-value" style="font-size: 1.5rem;">124.8 GB</div>
+                    </div>
+                    <div class="metric-card green" style="padding: 1rem;">
+                        <div class="metric-card-header" style="font-size: 0.75rem;">
+                            <span>Avg Session</span>
+                        </div>
+                        <div class="metric-value" style="font-size: 1.5rem;">1h 14m</div>
+                    </div>
+                </div>
+
+                <!-- Session Logs List -->
+                <div class="layout-card">
+                    <div class="card-title-bar">
+                        <div class="card-title">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                            <span>Session Logs</span>
+                        </div>
+                        <button id="clear-history-btn" class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.75rem;">Clear Logs</button>
+                    </div>
+                    
+                    <input type="text" id="history-search" class="setting-input" placeholder="Search by name or MAC..." style="margin-bottom: 0.75rem; font-size: 0.85rem; padding: 0.5rem 0.75rem;">
+                    
+                    <!-- Mobile-friendly session history cards list (instead of heavy horizontal table) -->
+                    <div id="history-list-container" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- SETTINGS TAB -->
+            <section id="settings" class="tab-content">
+                
+                <!-- SSID Card -->
+                <div class="layout-card">
+                    <div class="card-title">SSID Configuration</div>
+                    <div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 0.5rem;">
+                        <div class="form-group">
+                            <label for="settings-ssid">Network Name (SSID)</label>
+                            <input type="text" id="settings-ssid" class="setting-input" value="USA-Tech-Hotspot">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="settings-password">Password</label>
+                            <input type="text" id="settings-password" class="setting-input" value="hotspotpassword123">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="settings-band">Band Mode</label>
+                            <select id="settings-band" class="setting-input" style="cursor: pointer;">
+                                <option value="2.4">2.4 GHz (Long Range)</option>
+                                <option value="5.0" selected>5.0 GHz (High Speed)</option>
+                            </select>
+                        </div>
+                        
+                        <button id="save-hotspot-settings" class="btn btn-primary">Save Hotspot Config</button>
+                    </div>
+                </div>
+
+                <!-- Admin Security Config -->
+                <div class="layout-card">
+                    <div class="card-title">Dashboard Credentials</div>
+                    <div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 0.5rem;">
+                        <div class="form-group">
+                            <label for="settings-passcode">Dashboard PIN Code</label>
+                            <input type="password" id="settings-passcode" class="setting-input" value="1234" maxlength="6">
+                        </div>
+
+                        <button id="save-security-settings" class="btn btn-primary">Update Admin PIN</button>
+                    </div>
+                </div>
+
+                <!-- Logout panel -->
+                <div style="text-align: center; margin-top: 1rem; margin-bottom: 2rem;">
+                    <button id="logout-btn" class="btn btn-danger" style="width: 100%; max-width: 250px;">Lock Dashboard Session</button>
+                </div>
+
+            </section>
+
+        </div> <!-- End app-content -->
+
+        <!-- Mobile App Bottom Navigation Bar -->
+        <div class="app-bottom-nav">
+            <div class="nav-item active" data-tab="dashboard">
+                <div class="nav-icon">📊</div>
+                <span>Status</span>
+            </div>
+            <div class="nav-item" data-tab="devices">
+                <div class="nav-icon">👥</div>
+                <span>Clients</span>
+            </div>
+            <div class="nav-item" data-tab="rules">
+                <div class="nav-icon">🛡️</div>
+                <span>Rules</span>
+            </div>
+            <div class="nav-item" data-tab="history">
+                <div class="nav-icon">📜</div>
+                <span>History</span>
+            </div>
+            <div class="nav-item" data-tab="settings">
+                <div class="nav-icon">⚙️</div>
+                <span>Settings</span>
+            </div>
+        </div>
+
+    </div> <!-- End app-container -->
+
+    <!-- Toast Warning alerts -->
+    <div id="toast-container"></div>
+
+    <!-- Details Dialog dialog -->
+    <div id="device-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <span class="modal-title" id="modal-device-title">Device Profile</span>
+                <button class="modal-close-btn" id="modal-close-icon">&times;</button>
+            </div>
+            
+            <div class="form-group">
+                <label for="modal-input-name">Friendly Name</label>
+                <input type="text" id="modal-input-name" class="setting-input">
+            </div>
+
+            <div class="form-group">
+                <label for="modal-select-priority">Priority Group Mapping</label>
+                <select id="modal-select-priority" class="setting-input">
+                    <option value="P1">P1 - Owner Devices</option>
+                    <option value="P2">P2 - Family Members</option>
+                    <option value="P3">P3 - Guest Friends</option>
+                    <option value="P4">P4 - Unknown Clients</option>
+                </select>
+            </div>
+
+            <div class="detail-grid">
+                <div class="detail-item">
+                    <span class="detail-label">IP Address</span>
+                    <span id="modal-detail-ip" class="detail-value">192.168.43.20</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">MAC ID</span>
+                    <span id="modal-detail-mac" class="detail-value">00:00:00:00:00:00</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">AI Trust Score</span>
+                    <span id="modal-detail-trust" class="detail-value">95 / 100</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Exchanged Data</span>
+                    <span id="modal-detail-rate" class="detail-value">0.0 Mbps</span>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="modal-cancel-btn">Cancel</button>
+                <button class="btn btn-danger" id="modal-block-btn">Block Device</button>
+                <button class="btn btn-primary" id="modal-save-btn">Apply Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
