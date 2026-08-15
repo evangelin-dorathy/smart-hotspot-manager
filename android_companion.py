@@ -6,7 +6,7 @@ import socket
 import subprocess
 import requests
 
-API_URL = "http://localhost:5000/api/android/sync"
+API_URL = "https://smart-hotspot-manager.onrender.com/api/android/sync"
 
 def get_local_ip():
     """Get the active local IP address of this machine."""
